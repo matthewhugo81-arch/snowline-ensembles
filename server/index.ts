@@ -1,4 +1,4 @@
-import {extractStep, gridPoint, jsonIndex} from './mogreps-core.js';
+import {extractStep, gridPoint, jsonIndex, stepCacheKey, completeStep, hasPressure} from './mogreps-core.js';
 
 const INDEX_ROOT = 'https://matthewhugo81-arch.github.io/snowline-ensembles/mogreps/';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -16,10 +16,17 @@ function reply(data: unknown, status = 200, cache = 'no-store') {
 async function index(path: string, signal: AbortSignal) {
   const cached = indexes.get(path);
   if (cached && cached.expires > Date.now()) return cached.promise;
-  const promise = jsonIndex(INDEX_ROOT + path, (u: string, o = {}) => fetch(u, {...o, signal}));
+  const manifest = path.endsWith('/manifest.json');
+  const promise = jsonIndex(INDEX_ROOT + path, (u: string, o = {}) => fetch(u, {...o, signal, ...(manifest ? {cache: 'no-cache'} : {})}));
   indexes.set(path, {expires: Date.now() + 300000, promise});
   if (indexes.size > 160) indexes.delete(indexes.keys().next().value!);
-  try { return await promise; } catch (e) { indexes.delete(path); throw e; }
+  try {
+    const result = await promise;
+    // A retained run may gain its new pressure indexes during deployment.
+    // Share an in-flight read, then revalidate legacy manifests immediately.
+    if (manifest && !hasPressure(result) && indexes.get(path)?.promise === promise) indexes.delete(path);
+    return result;
+  } catch (e) { indexes.delete(path); throw e; }
 }
 async function cleanup() {
   if (Date.now() - lastCleanup < 3600000) return;
@@ -43,27 +50,29 @@ Deno.serve(async req => {
     const signal = AbortSignal.timeout(110000);
     const manifest = await index(`${runId}/manifest.json`, signal);
     if (manifest.runId !== runId || Math.abs(Date.now() / 1000 - manifest.run) > 72 * 3600) return reply({error: 'Forecast run expired. Refresh to load a newer run.'}, 410);
-    const key = `v1:${runId}:${point.y}:${point.x}:${lead}`;
+    const key = stepCacheKey(manifest, point, lead);
     const hit = await fetch(`${TABLE}?key=eq.${key}&select=payload`, {headers: dbHeaders, signal});
     if (hit.ok) {
       const rows = await hit.json();
-      if (rows.length) return reply({...rows[0].payload, cached: true}, 200, 'public, max-age=21600');
+      if (rows.length && completeStep(rows[0].payload)) return reply({...rows[0].payload, cached: true}, 200, 'public, max-age=21600');
     } else await hit.body?.cancel();
     if (!pending.has(key)) {
       pending.set(key, (async () => {
         const result = await extractStep(manifest, point, lead,
           (kind: string, h: number) => index(`${runId}/${kind}-${String(h).padStart(3, '0')}.json.gz`, signal),
           (url: string, options = {}) => fetch(url, {...options, signal}));
-        const saved = await fetch(TABLE + '?on_conflict=key', {method: 'POST', headers: {...dbHeaders, Prefer: 'resolution=merge-duplicates,return=minimal'}, body: JSON.stringify({key, run: manifest.run, payload: result}), signal});
-        if (!saved.ok) console.error('MOGREPS cache write failed', saved.status);
-        await saved.body?.cancel();
+        if (completeStep(result)) {
+          const saved = await fetch(TABLE + '?on_conflict=key', {method: 'POST', headers: {...dbHeaders, Prefer: 'resolution=merge-duplicates,return=minimal'}, body: JSON.stringify({key, run: manifest.run, payload: result}), signal});
+          if (!saved.ok) console.error('MOGREPS cache write failed', saved.status);
+          await saved.body?.cancel();
+        }
         return result;
       })());
     }
     try {
       const result = await pending.get(key);
       await cleanup().catch(() => {});
-      return reply(result, 200, 'public, max-age=21600');
+      return reply(result, 200, completeStep(result) ? 'public, max-age=21600' : 'no-store');
     } finally { pending.delete(key); }
   } catch (e) {
     console.error('MOGREPS extraction failed', e instanceof Error ? e.message : 'Unknown error');

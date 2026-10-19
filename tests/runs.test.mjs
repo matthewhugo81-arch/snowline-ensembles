@@ -29,7 +29,7 @@ test('rolling feed metadata cannot masquerade as a verified per-point run in exp
   assert.equal(verifiedRun({generationtime_ms:8,hourly:{time:[run]}}),null);
 });
 
-test('GEFS pressure charts use only 0.5-degree timing; precip and snow preserve both runs',()=>{
+test('GEFS upper-air charts use only 0.5-degree timing; precip, snow and MSLP preserve both runs',()=>{
   const split=[source('ncep_gefs025',run+21600,run+25200),gfs[1]];
   const info=resolveFeedRuns(model('gfs'),split,split,requested+21600000,requested+21601000);
   assert.equal(runSummary(info,'temperature_850hPa'),'Feed run 19 Oct 06Z');
@@ -37,6 +37,8 @@ test('GEFS pressure charts use only 0.5-degree timing; precip and snow preserve 
   assert.match(runSummary(info,'precipitation'),/0\.25° 19 Oct 12Z.*0\.5° 19 Oct 06Z/);
   assert.equal(relevantSources(info,'snow').length,2);
   assert.equal(relevantSources(info,'snowfall_member_agreement').length,2);
+  assert.equal(relevantSources(info,'pressure_msl').length,2);
+  assert.equal(runSummary(info,'pressure_msl'),runSummary(info,'precipitation'));
   assert.equal(runExport(info,'temperature_850hPa').feedRuns,'ncep_gefs05=2026-10-19T06:00:00.000Z');
   assert.match(runExport(info,'snowfall_member_agreement').feedRuns,/ncep_gefs025=.*ncep_gefs05=/);
 });
@@ -119,6 +121,7 @@ test('forecast fetch brackets the same dataset with metadata and keeps verified 
     order.push('forecast');const parsed=new URL(url);
     assert.equal(parsed.searchParams.get('models'),'ecmwf_ifs025_ensemble');
     assert.equal(parsed.searchParams.get('past_days'),'1');
+    assert.ok(parsed.searchParams.get('hourly').split(',').includes('pressure_msl'));
     return json(raw);
   });
   const result=await fetchEnsemble(model('ec'),{lat:53.9,lon:-2.2});

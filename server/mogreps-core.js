@@ -1,6 +1,15 @@
 // Runtime-neutral decoder used by the hosted endpoint and independent tests.
 export const SOURCE = 'https://met-office-global-ensemble-model-data.s3.eu-west-2.amazonaws.com/';
 export const GRID = {latitude: [-89.90625, .1875, 960], longitude: [-179.859375, .28125, 1280]};
+export const hasPressure = manifest => manifest.variables?.includes('pressure_msl') === true;
+// Capability is part of the key: an old four-field index can be upgraded for
+// the same run without inheriting a cached response that has no pressure.
+export function stepCacheKey(manifest, point, lead) {
+  return `v2:${hasPressure(manifest) ? 'mslp' : 'legacy'}:${manifest.runId}:${point.y}:${point.x}:${lead}`;
+}
+export function completeStep(step) {
+  return step.schema === 1 && step.units?.pressure_msl === 'hPa' && !step.missingVariables?.length && Array.isArray(step.values?.pressure_msl) && step.values.pressure_msl.length === 18 && step.values.pressure_msl.some(Number.isFinite) && step.values.pressure_msl.every(v => v === null || typeof v === 'number' && Number.isFinite(v));
+}
 export function gridPoint(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) throw Error('Invalid coordinates');
   const y = Math.max(0, Math.min(959, Math.round((lat - GRID.latitude[0]) / GRID.latitude[1])));
@@ -102,6 +111,22 @@ export async function extractStep(manifest, point, lead, loadIndex, fetcher = fe
     // Snow-depth equivalent uses Open-Meteo's 7:1 snow-to-water ratio.
     values[kind] = total.map(v => v === null ? null : v * (kind === 'precipitation' ? 1000 : 700));
   }
+  values.pressure_msl = new Array(18).fill(null);
+  const missingVariables = [];
+  if (hasPressure(manifest)) {
+    try {
+      const index = check(await loadIndex('pressure_msl', lead), 'pressure_msl', lead);
+      if (index.units !== 'Pa' || !['latitude', 'longitude'].every(axis => Array.isArray(index.grid?.[axis]) && index.grid[axis].length === 3 && index.grid[axis].every((v, i) => v === (manifest.grid ?? GRID)[axis]?.[i])) || JSON.stringify(index.data?.shape) !== JSON.stringify([18, 960, 1280])) throw Error('Mean sea-level pressure units or grid mismatch');
+      const pressure = await extractFile(index, point, fetcher);
+      values.pressure_msl = pressure.map(v => v === null ? null : v / 100);
+      if (!values.pressure_msl.some(Number.isFinite)) missingVariables.push('pressure_msl');
+    } catch {
+      // Keep the other verified fields available if pressure is temporarily
+      // missing. This response is not cached, so Refresh can retry it.
+      missingVariables.push('pressure_msl');
+    }
+  } else missingVariables.push('pressure_msl');
   return {schema: 1, run: reference, time: reference + lead * 3600, intervalHours: 3,
-    members: manifest.members, latitude: point.latitude, longitude: point.longitude, values};
+    members: manifest.members, latitude: point.latitude, longitude: point.longitude,
+    units: {pressure_msl: 'hPa'}, missingVariables, values};
 }

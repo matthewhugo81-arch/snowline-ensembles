@@ -30,6 +30,8 @@ jobs:
         run: npm test
       - name: Install source indexer
         run: pip install -r scripts/requirements.txt
+      - name: Test source index validation
+        run: python tests/test_index_mogreps.py
       - name: Restore recent source indexes
         uses: actions/cache/restore@v4
         with:

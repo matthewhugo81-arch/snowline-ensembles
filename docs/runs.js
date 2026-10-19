@@ -1,9 +1,9 @@
 // Metadata uses the same free ensemble service as the point forecast.
 // Sources: Open-Meteo /en/docs/model-updates and its GFS/GEM domain mappings.
-// GEFS upper-air fields use 0.5° only; precipitation/snowfall can use both grids.
+// GEFS upper-air fields use 0.5° only; precipitation/snowfall/MSLP can use both grids.
 const SOURCES = {
   gfs: [
-    {domain:'ncep_gefs025',label:'0.25°',variables:['precipitation','snowfall']},
+    {domain:'ncep_gefs025',label:'0.25°',variables:['precipitation','snowfall','pressure_msl']},
     {domain:'ncep_gefs05',label:'0.5°'}
   ],
   ec: [{domain:'ecmwf_ifs025_ensemble',label:'IFS ENS'}],

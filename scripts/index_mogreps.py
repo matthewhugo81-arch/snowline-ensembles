@@ -26,7 +26,11 @@ ROOT = 'https://met-office-global-ensemble-model-data.s3.eu-west-2.amazonaws.com
 NS = {'s': 'http://s3.amazonaws.com/doc/2006-03-01/'}
 KINDS = {'temperature': ('temperature_on_pressure_levels', 'air_temperature'),
          'precipitation': ('precipitation_accumulation', 'lwe_thickness_of_precipitation_amount'),
-         'snowfall': ('snowfall_accumulation', 'lwe_thickness_of_snowfall_amount')}
+         'snowfall': ('snowfall_accumulation', 'lwe_thickness_of_snowfall_amount'),
+         'pressure_msl': ('pressure_at_mean_sea_level', 'air_pressure_at_sea_level')}
+ACCUMULATIONS = {'precipitation', 'snowfall'}
+VARIABLES = ['temperature_850hPa', 'temperature_500hPa', 'precipitation', 'snowfall', 'pressure_msl']
+GRID = {'latitude': [-89.90625, .1875, 960], 'longitude': [-179.859375, .28125, 1280]}
 
 
 def listing(prefix):
@@ -48,14 +52,14 @@ def listing(prefix):
 def source_key(run, lead, kind):
     valid = run + timedelta(hours=lead)
     param = KINDS[kind][0]
-    if kind != 'temperature':
+    if kind in ACCUMULATIONS:
         param += '-PT01H' if lead <= 132 else '-PT03H'
     return (run.strftime('global-ensemble/%Y/%m/%d/T%H00Z/') +
             valid.strftime('%Y%m%dT%H00Z') + f'-PT{lead:04d}H00M-{param}.nc')
 
 
 def native_leads(kind):
-    return list(range(0, 247, 3)) if kind == 'temperature' else list(range(1, 133)) + list(range(135, 247, 3))
+    return list(range(1, 133)) + list(range(135, 247, 3)) if kind in ACCUMULATIONS else list(range(0, 247, 3))
 
 
 def text_attr(value):
@@ -98,7 +102,8 @@ def build_file(job):
     if target.exists():
         with gzip.open(target, 'rt') as f:
             saved = json.load(f)
-        if saved.get('etag') == obj['etag'] and saved.get('schema') == 1:
+        pressure_valid = kind != 'pressure_msl' or (saved.get('units') == 'Pa' and saved.get('grid') == GRID)
+        if saved.get('etag') == obj['etag'] and saved.get('schema') == 1 and pressure_valid:
             return {'kind': kind, 'lead': lead, 'cached': True}
     for attempt in range(3):
         try:
@@ -126,6 +131,14 @@ def build_file(job):
                         assert text_attr(flag.attrs['flag_meanings']) == 'above_surface_pressure below_surface_pressure'
                         assert flag.attrs['flag_values'].tolist() == [0, 1]
                         doc['flag'] = dataset_index(flag, levels)
+                    elif kind == 'pressure_msl':
+                        assert text_attr(var.attrs['standard_name']) == 'air_pressure_at_sea_level'
+                        assert text_attr(var.attrs['units']) == 'Pa'
+                        assert var.shape == (18, 960, 1280)
+                        assert not any(method in text_attr(var.attrs.get('cell_methods', '')) for method in ('time: sum', 'time: mean'))
+                        doc['units'] = 'Pa'
+                        doc['grid'] = GRID
+                        doc['data'] = dataset_index(var)
                     else:
                         assert text_attr(var.attrs['units']) == 'm'
                         assert text_attr(var.attrs['cell_methods']) == 'time: sum'
@@ -150,7 +163,7 @@ def main():
     parser.add_argument('--output', default='docs/mogreps')
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--run', help='Explicit run, e.g. 2026-10-19T06:00:00+00:00')
-    parser.add_argument('--probe', action='store_true', help='Index only +24h temperature and +22/23/24 accumulations')
+    parser.add_argument('--probe', action='store_true', help='Index only +24h temperature/pressure and +22/23/24 accumulations')
     args = parser.parse_args()
     output = Path(args.output)
     now = datetime.now(timezone.utc)
@@ -161,7 +174,7 @@ def main():
         inventory = listing(run.strftime('global-ensemble/%Y/%m/%d/T%H00Z/'))
         needed = [(kind, lead) for kind in KINDS for lead in native_leads(kind)]
         if args.probe:
-            needed = [('temperature', 24)] + [(kind, lead) for kind in ('precipitation', 'snowfall') for lead in (22, 23, 24)]
+            needed = [('temperature', 24), ('pressure_msl', 24)] + [(kind, lead) for kind in ('precipitation', 'snowfall') for lead in (22, 23, 24)]
         if all(source_key(run, lead, kind) in inventory for kind, lead in needed):
             run_id = run.strftime('%Y%m%dT%H00Z')
             folder = output / run_id
@@ -179,7 +192,7 @@ def main():
                 print(f'{n}/{len(jobs)} indexed; {result}', flush=True)
     manifest = {'schema': 1, 'runId': run_id, 'run': int(run.timestamp()),
                 'generated': datetime.now(timezone.utc).isoformat(), 'members': [0] + list(range(1, 18) if run.hour in (0, 12) else range(18, 35)),
-                'grid': {'latitude': [-89.90625, .1875, 960], 'longitude': [-179.859375, .28125, 1280]},
+                'grid': GRID, 'variables': VARIABLES,
                 'leads': list(range(0, 247, 3)), 'intervalHours': 3,
                 'source': 'Met Office MOGREPS-G on AWS', 'license': 'CC BY-SA 4.0',
                 'sourceUrl': 'https://registry.opendata.aws/met-office-global-ensemble/'}
