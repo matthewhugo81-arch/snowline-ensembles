@@ -8,7 +8,9 @@ A buildless dashboard using Snowline's navy and teal design. `npm start` serves 
 
 ## Forecast sources
 
-GFS ENS uses Open-Meteo `ncep_gefs_seamless` (31 members), EC ENS uses `ecmwf_ifs025_ensemble` (51), and GEM ENS uses `gem_global_ensemble` (21). These feeds do not identify initialization time in their response; the UI shows retrieval time without guessing a run. Hourly values may be interpolated by the provider. One past day is requested to support preceding-period totals.
+GFS ENS uses Open-Meteo `ncep_gefs_seamless` (31 members), EC ENS uses `ecmwf_ifs025_ensemble` (51), and GEM ENS uses `gem_global_ensemble` (21). Their issue times are read from the [provider metadata API](https://open-meteo.com/en/docs/model-updates) on the same `ensemble-api.open-meteo.com` service before and after each point forecast request. Model cards and individual charts show the date and UTC cycle separately from retrieval time. Changed or one-sided metadata is labelled unverified; newly available data is labelled updating for the provider's documented 10-minute consistency window. Metadata errors leave the forecast usable and its issue time unavailable, never guessed.
+
+GEFS checks both `ncep_gefs025` and `ncep_gefs05`; different cycles are displayed separately. Upper-air temperatures use the 0.5° feed, while precipitation and snowfall can use both. EC uses `ecmwf_ifs025_ensemble` metadata and GEM uses `cmc_gem_geps`. These times describe the latest reported feed initialization: the point API is a rolling forecast and can retain older runs at longer lead times. It does not guarantee one pinned run for every value. Hourly values may be interpolated by the provider. One past day is requested to support preceding-period totals.
 
 MOGREPS-G is taken directly from the [free Met Office AWS dataset](https://registry.opendata.aws/met-office-global-ensemble/). All 18 members of 850 hPa temperature, 500 hPa temperature, total precipitation and snowfall use the same verified initialization, grid point and member IDs. Member 0 is control; perturbed IDs are 1–17 at 00/12Z and 18–34 at 06/18Z. No deterministic temperatures or other models are substituted.
 
@@ -30,7 +32,9 @@ For local preview with live MOGREPS, copy the deployed `mogreps/latest.json` int
 
 ## Interface and exports
 
-Automatic axes include member extremes. Manual/fixed scales report clipped values. Zoom and inspection are linked across panels. CSV includes coordinates, source, licence, retrieval time, verified run time where supplied, valid time, interval and actual member IDs; nulls are empty fields. SVG exports include source attribution and run information.
+Automatic axes include member extremes. Manual/fixed scales report clipped values. Zoom and inspection are linked across panels. CSV includes coordinates, source, licence, retrieval time, verified run time where supplied, valid time, interval and actual member IDs; nulls are empty fields. Its `run_utc` field remains reserved for the verified Met Office run. Separate `feed_runs_utc`, `run_metadata_status` and `run_metadata_source` fields preserve source-specific Open-Meteo timings without presenting them as pinned per-point runs. SVG exports include the same chart-specific issue information, with wrapped footers for narrow views.
+
+All four panels open in their larger viewing size on desktop and mobile; each has a Minimise button. Members start in Multicolour, with Tonal available on both desktop and mobile. An explicit palette choice is saved under `snowline-ens-member-palette-v2`; older implicit defaults do not override the new starting preference.
 
 Search uses Open-Meteo/GeoNames. The map uses Leaflet and OpenStreetMap. Favourites, recent places and theme are stored locally. Forecasts are held in browser memory until refresh. Shared URLs contain the selected location and model.
 
