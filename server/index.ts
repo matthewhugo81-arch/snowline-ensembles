@@ -38,6 +38,7 @@ Deno.serve(async req => {
     const runId = u.searchParams.get('run') ?? '';
     const lead = Number(u.searchParams.get('lead'));
     if (!u.searchParams.has('lat') || !u.searchParams.has('lon') || !u.searchParams.has('lead') || !/^\d{8}T(?:00|06|12|18)00Z$/.test(runId) || !Number.isInteger(lead) || lead < 0 || lead > 246 || lead % 3) return reply({error: 'Invalid forecast request'}, 400);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return reply({error: 'Invalid coordinates'}, 400);
     const point = gridPoint(lat, lon);
     const signal = AbortSignal.timeout(110000);
     const manifest = await index(`${runId}/manifest.json`, signal);
