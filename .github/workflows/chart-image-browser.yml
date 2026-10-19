@@ -1,0 +1,59 @@
+name: Ensemble chart image browser tests
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/app.js'
+      - 'docs/chart-image-export.js'
+      - 'docs/data.js'
+      - 'docs/runs.js'
+      - 'docs/mogreps.js'
+      - 'docs/index.html'
+      - 'docs/style.css'
+      - 'package*.json'
+      - 'tests/chart-image-browser.mjs'
+      - '.github/workflows/chart-image-browser.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/app.js'
+      - 'docs/chart-image-export.js'
+      - 'docs/data.js'
+      - 'docs/runs.js'
+      - 'docs/mogreps.js'
+      - 'docs/index.html'
+      - 'docs/style.css'
+      - 'package*.json'
+      - 'tests/chart-image-browser.mjs'
+      - '.github/workflows/chart-image-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ensemble-chart-images-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned Chromium and WebKit test browsers
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Check chart images, clipboard timing and iPhone fallback offline
+        run: node tests/chart-image-browser.mjs
+        env:
+          SNOWLINE_TEST_OUTPUT: review-output/chart-images
+      - name: Preserve PNG checks and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ensemble-chart-images
+          path: review-output/chart-images/
+          if-no-files-found: ignore
+          retention-days: 7

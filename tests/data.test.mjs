@@ -35,7 +35,7 @@ test('missing pressure is not replaced by temperatures or a deterministic foreca
 
 test('actual CSV export writes hPa pressure rows with zero accumulation interval and member identity',async()=>{
   const moduleText=await readFile(new URL('../docs/app.js',import.meta.url),'utf8');
-  const source=moduleText.slice(moduleText.indexOf('function exportCSV(){'),moduleText.indexOf('function saveChart('));
+  const source=moduleText.slice(moduleText.indexOf('function exportCSV(){'),moduleText.indexOf('function captureChartImage('));
   const m={id:'gfs',name:'GFS ENS',feed:'ncep_gefs_seamless'};
   const d=prepareDataset({hourly:{time:[0,10800],pressure_msl:[1014.2,1008.6],pressure_msl_member01:[1015.8,1005.4]}},m,0);
   const sampled=resample(d,3);let output;

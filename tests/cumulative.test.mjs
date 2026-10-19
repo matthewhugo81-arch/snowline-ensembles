@@ -86,8 +86,8 @@ const app=await readFile(new URL('../docs/app.js',import.meta.url),'utf8');
 const configSource=app.slice(app.indexOf('const configs=['),app.indexOf('];',app.indexOf('const configs=['))+2);
 const nearestSource=app.slice(app.indexOf('function nearestTime('),app.indexOf('function pointIndex('));
 const chartSource=app.slice(app.indexOf('function getYDomain('),app.indexOf('function mogrInfo('));
-const csvSource=app.slice(app.indexOf('function exportCSV(){'),app.indexOf('function saveChart('));
-const svgSource=app.slice(app.indexOf('function saveChart('),app.indexOf('async function openMap('));
+const csvSource=app.slice(app.indexOf('function exportCSV(){'),app.indexOf('function captureChartImage('));
+const svgSource=app.slice(app.indexOf('function captureChartImage('),app.indexOf('async function openMap('));
 
 function harness(datasets,window,options={}){
   const models=datasets.map(d=>d.model),sampled=new Map(datasets.map(d=>[d.model.id,resample(d,options.interval??3)])),elements=new Map();
@@ -160,7 +160,7 @@ test('actual CSV exports model-specific cumulative values, boundaries, member co
 });
 
 test('actual SVG export resolves theme blue and distinguishes requested coverage from the counted prefix',async()=>{
-  const d=fixture([0,3,6,9],[[null,2,null,4]],3),h=harness([d],[0,9*H],{theme:'light'});h.run("saveChart('precipitation');");
+  const d=fixture([0,3,6,9],[[null,2,null,4]],3),h=harness([d],[0,9*H],{theme:'light'});h.run("download(new Blob([captureChartImage('precipitation').svg],{type:'image/svg+xml'}),'chart.svg');");
   const svg=await h.context.downloaded.blob.text();
   assert.match(svg,/stroke="#0058bd"/);
   assert.doesNotMatch(svg,/var\(--cumulative\)/);
