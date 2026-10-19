@@ -1,5 +1,5 @@
-import {fetchMogreps} from './mogreps.js?v=20261019-mslp';
-import {fetchRunMetadata,resolveFeedRuns,verifiedRun} from './runs.js?v=20261019-mslp';
+import {fetchMogreps} from './mogreps.js?v=20261019-cumulative';
+import {fetchRunMetadata,resolveFeedRuns,verifiedRun} from './runs.js?v=20261019-cumulative';
 export const MODELS = [
   {id:'gfs',name:'GFS ENS',feed:'ncep_gefs_seamless',agency:'NOAA · GEFS',members:31,days:16,color:'#f3798a'},
   {id:'ec',name:'EC ENS',feed:'ecmwf_ifs025_ensemble',agency:'ECMWF · IFS ENS',members:51,days:15,color:'#4ac7ce'},
@@ -21,9 +21,32 @@ export function extractMembers(hourly,variable){return Object.keys(hourly).filte
 function memberNumber(key){return Number(key.match(/_member(\d+)$/)?.[1]??0);}
 export function aggregateMember(values,times,index,interval,nativeInterval=1){if(interval<nativeInterval||interval%nativeInterval)return null;let sum=0;for(let j=0;j<interval/nativeInterval;j++){const k=index-j;if(k<0||!valid(values[k])||times[index]-times[k]!==j*nativeInterval*3600)return null;sum+=values[k];}return sum;}
 export function prepareDataset(raw,model,retrieved=Date.now()) {if(!raw.hourly?.time?.length)throw new Error('No hourly forecast returned.');const members=Object.fromEntries(VARIABLES.map(v=>[v,extractMembers(raw.hourly,v)]));return {model,raw,members,retrieved,runInfo:verifiedRun(raw)};}
-export function resample(dataset,interval){const times=dataset.raw.hourly.time,indices=times.map((t,i)=>t%(interval*3600)===0?i:-1).filter(i=>i>=0),result={time:indices.map(i=>times[i]),variables:{}};
+export function resample(dataset,interval){const times=dataset.raw.hourly.time,indices=times.map((t,i)=>t%(interval*3600)===0?i:-1).filter(i=>i>=0),result={time:indices.map(i=>times[i]),intervalHours:interval,expectedMembers:dataset.model.members,variables:{}};
   for(const variable of VARIABLES){const accumulated=VARIABLE_DETAILS[variable].accumulated;const members=dataset.members[variable].map(m=>({id:m.id,values:indices.map(i=>accumulated?aggregateMember(m.values,times,i,interval,dataset.raw.intervalHours??1):(valid(m.values[i])?m.values[i]:null))}));const stats=indices.map((_,i)=>statistics(members.map(m=>m.values[i])));result.variables[variable]={members,stats};}
   const snow=result.variables.snowfall.members;result.variables.snow={members:[],stats:indices.map((_,i)=>{const a=snow.map(m=>m.values[i]).filter(valid),hits=a.filter(v=>v>=.1).length;return {count:a.length,hits,mean:a.length?hits/a.length*100:null};})};return result;
+}
+// A sampled precipitation value covers (time - interval, time]. The value at
+// the visible start therefore belongs before the cumulative window. Only whole,
+// adjacent periods inside the visible range contribute; a gap ends the known
+// cumulative prefix instead of silently restarting or skipping missing rain.
+export function cumulativePrecipitation(sample,start,end){
+  const step=sample?.intervalHours*3600;
+  if(!valid(step)||step<=0||!valid(start)||!valid(end)||end<start)return null;
+  const first=Math.ceil(start/step)*step,last=Math.floor(end/step)*step,required=Math.max(0,Math.round((last-first)/step));
+  const result={start:first,end:last,visibleStart:start,visibleEnd:end,intervalHours:sample.intervalHours,required,completed:0,time:[],values:[],memberMin:[],memberMax:[],firstMissing:null,total:null,status:'empty',expectedMembers:sample.expectedMembers};
+  if(!required)return result;
+  const indices=new Map();
+  sample.time.forEach((t,i)=>indices.set(t,indices.has(t)?null:i));
+  let sum=0,min=Infinity,max=0,broken=false;
+  result.time.push(first);result.values.push(0);result.memberMin.push(null);result.memberMax.push(null);
+  for(let t=first+step;t<=last;t+=step){
+    const i=indices.get(t),stat=i===undefined||i===null?null:sample.variables.precipitation?.stats[i];
+    if(!broken&&(!valid(stat?.mean)||!(stat.count>0))){broken=true;result.firstMissing=t;}
+    if(!broken){sum+=stat.mean;min=Math.min(min,stat.count);max=Math.max(max,stat.count);result.completed++;}
+    result.time.push(t);result.values.push(broken?null:sum);result.memberMin.push(!broken?min:null);result.memberMax.push(!broken?max:null);
+  }
+  result.status=broken?'incomplete':'complete';result.total=broken?null:sum;
+  return result;
 }
 export function niceDomain(values,zero=false){const a=values.filter(valid);if(!a.length)return {min:0,max:1,step:.25};let lo=zero?0:Math.min(...a),hi=Math.max(...a);let span=hi-lo;if(span<1){lo=zero?0:lo-1;hi=zero?Math.max(1,hi):hi+1;span=hi-lo;}else{if(!zero)lo-=span*.08;hi+=span*.08;}const raw=(hi-lo)/5,power=10**Math.floor(Math.log10(raw)),step=[1,2,2.5,5,10].map(x=>x*power).find(x=>x>=raw)??power*10;return {min:zero?0:Math.floor(lo/step)*step,max:Math.ceil(hi/step)*step,step};}
 export function parseCoordinates(text){const match=text.trim().match(/^([+-]?\d+(?:\.\d+)?)\s*[,;]\s*([+-]?\d+(?:\.\d+)?)$/);if(!match)return null;const lat=+match[1],lon=+match[2];if(Math.abs(lat)>90||Math.abs(lon)>180)throw new Error('Latitude must be −90 to 90, longitude −180 to 180.');return {name:'Selected coordinates',lat,lon};}

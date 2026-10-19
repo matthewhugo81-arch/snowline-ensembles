@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {aggregateMember,statistics,extractMembers,prepareDataset,resample,niceDomain,parseCoordinates,VARIABLES,VARIABLE_DETAILS} from '../docs/data.js';
+import {aggregateMember,statistics,extractMembers,prepareDataset,resample,cumulativePrecipitation,niceDomain,parseCoordinates,VARIABLES,VARIABLE_DETAILS} from '../docs/data.js';
 import {runExport} from '../docs/runs.js';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
@@ -39,7 +39,7 @@ test('actual CSV export writes hPa pressure rows with zero accumulation interval
   const m={id:'gfs',name:'GFS ENS',feed:'ncep_gefs_seamless'};
   const d=prepareDataset({hourly:{time:[0,10800],pressure_msl:[1014.2,1008.6],pressure_msl_member01:[1015.8,1005.4]}},m,0);
   const sampled=resample(d,3);let output;
-  const context={state:{model:'gfs',location:{lat:53.9,lon:-2.2},interval:3,datasets:new Map([['gfs',d]])},VARIABLES,VARIABLE_DETAILS,valid:Number.isFinite,runExport,visibleModels:()=>[m],getSample:()=>sampled,visiblePoints:()=>[0,1],Date,Blob,toast:()=>{},download:blob=>{output=blob;}};
+  const context={state:{model:'gfs',location:{lat:53.9,lon:-2.2},interval:3,datasets:new Map([['gfs',d]])},VARIABLES,VARIABLE_DETAILS,valid:Number.isFinite,runExport,visibleModels:()=>[m],getSample:()=>sampled,visiblePoints:()=>[0,1],domain:()=>[0,10800],cumulativePrecipitation,Date,Blob,toast:()=>{},download:blob=>{output=blob;}};
   vm.runInNewContext(source+'\nexportCSV();',context);
   const lines=(await output.text()).replace(/^\uFEFF/,'').split('\r\n').map(line=>line.slice(1,-1).split('","'));
   const header=lines.shift(),rows=lines.map(values=>Object.fromEntries(header.map((key,i)=>[key,values[i]])));
