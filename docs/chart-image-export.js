@@ -14,6 +14,9 @@ export async function renderChartImage(snapshot) {
     canvas.height = Math.ceil(snapshot.height * scale);
     const context = canvas.getContext('2d');
     if (!context) throw Error('PNG rendering is unavailable. You can still save the SVG.');
+    // Fill the captured theme colour before SVG rasterization to keep edge pixels opaque.
+    context.fillStyle = snapshot.background;
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(Error('Unable to create PNG. You can still save the SVG.')), 'image/png'));
     return {blob, filename:snapshot.filename, title:snapshot.title};
