@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 from mogreps_source import get, newest_complete_after
+from retain_map_runs import needs_refresh
 
 
 def companion_refresh(manifest, load=get):
@@ -36,7 +37,7 @@ def check():
         if manifest.get('schema') != 1 or len(manifest.get('members', [])) != 18:
             raise ValueError('Invalid published ensemble manifest')
         latest = newest_complete_after(reference, now)
-        refresh = latest > reference or now - reference > timedelta(hours=48) or companion_refresh(manifest)
+        refresh = latest > reference or now - reference > timedelta(hours=48) or companion_refresh(manifest) or needs_refresh()
         print(f'Published: {reference.isoformat()}; newest complete: {latest.isoformat()}; refresh: {refresh}')
     except HTTPError as error:
         if error.code != 404:

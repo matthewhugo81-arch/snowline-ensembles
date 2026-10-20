@@ -1,5 +1,14 @@
 # Snowline Ensembles
 
+The companion publication also retains completed GEFS and ECMWF additional map
+fields from the main Snowline publisher. `scripts/retain_map_runs.py` verifies
+every listed file before publishing its dated metadata, reuses existing files,
+and protects a complete predecessor while newer cycles arrive. The freshness
+gate detects uncaptured complete generations. Incoming model processing remains
+on the main publisher; these copies support its separate Run selector without
+adding an archive to the main site's limited storage. The assembled companion
+publication is measured before upload and must remain below 1,000,000,000 bytes.
+
 Live site: https://matthewhugo81-arch.github.io/snowline-ensembles/
 
 This repository is separate from the main Snowline dashboard. GitHub Actions publishes `docs/` to the existing GitHub Pages URL, including generated Met Office indexes. The original Snowline site is untouched.

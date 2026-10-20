@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: matthewhugo81-arch/snowline
-          ref: ea480a458f88f6844d1321c1a3b03217f62dd891
+          ref: a43feebf623efe83e2d8c94018b13d8ab8d25433
           path: map-importer
       - name: Install map conversion tools
         run: pip install -r map-importer/scripts/ensemble-requirements.txt
@@ -90,10 +90,13 @@ jobs:
           wait "$gem" || failed=1
           wait "$mogreps" || failed=1
           exit "$failed"
+      - name: Retain complete additional ensemble runs
+        run: python scripts/retain_map_runs.py
       - name: Assemble binary-safe companion publication
         run: |
           cp -a docs _site
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
+          python -c "from pathlib import Path; n=sum(p.stat().st_size for p in Path('_site').rglob('*') if p.is_file()); print(f'Published files: {n} bytes'); assert n < 1000000000, 'Publication exceeds the 1 GB hosting limit'"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
