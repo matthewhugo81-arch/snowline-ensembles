@@ -147,5 +147,22 @@ try{
   const browser=await chromium.launch(),page=await browser.newPage();const failed=await fixture(page,{metadataUnavailable:true});
   try{await page.goto(origin+'/?lat=54&lon=-2&model=gfs');await settled(page);await page.waitForFunction(()=>[...document.querySelectorAll('.model-run')].every(el=>/unavailable/i.test(el.textContent)));assert.equal(await page.locator('.plot>svg').count(),5);assert.doesNotMatch((await page.locator('.model-run').allTextContents()).join(' '),/\d{2} Oct \d{2}Z/);assert.deepEqual(failed.errors,[]);assert.deepEqual(failed.unexpected,[]);report.push({metadataOutage:'Charts remain usable; all four run cards report unavailable'});}
   finally{await browser.close();}
+  // A user can stop a slow load, keep the page usable and explicitly retry.
+  const recoveryBrowser=await chromium.launch(),recoveryPage=await recoveryBrowser.newPage({viewport:{width:320,height:844}}),recovery=await fixture(recoveryPage,{holdForecast:true});
+  try{
+    await recoveryPage.goto(origin+'/?lat=54&lon=-2&model=gfs');
+    await recoveryPage.locator('#stop-loading').waitFor({state:'visible'});
+    assert.equal(await recoveryPage.locator('#refresh').isDisabled(),true);
+    assert.equal(await recoveryPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Loading controls fit a 320px phone');
+    await recoveryPage.locator('#stop-loading').click();
+    assert.equal(await recoveryPage.locator('#refresh').isEnabled(),true);
+    assert.match(await recoveryPage.locator('#status').textContent(),/Loading stopped/);
+    assert.equal(await recoveryPage.locator('#stop-loading').isHidden(),true);
+    recovery.release();await recoveryPage.locator('#refresh').click();await settled(recoveryPage);
+    assert.equal(recovery.counts.forecasts,2,'Refresh starts one replacement forecast');
+    assert.doesNotMatch(await recoveryPage.locator('#status').textContent(),/Loading stopped/);
+    assert.deepEqual(recovery.errors,[]);assert.deepEqual(recovery.unexpected,[]);
+    report.push({cancelAndRefresh:'Stop restores Refresh immediately; retry renders all five charts'});
+  }finally{recovery.release();await recoveryBrowser.close();}
   await writeFile(resolve(out,'verification.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{await new Promise(resolve=>server.close(resolve));}

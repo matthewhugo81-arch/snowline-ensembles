@@ -20,3 +20,7 @@
   .chart-card[data-var=snow] .plot{height:149px}
   .expanded .plot{height:384px!important}
 }
+
+/* Cancellation stays reachable while long forecasts load on mobile. */
+.location-actions{flex-wrap:wrap}
+@media(max-width:760px){.location-bar{flex-wrap:wrap}}

@@ -1,4 +1,4 @@
-import {fetchMogreps} from './mogreps.js?v=20261019-image-background';
+import {fetchMogreps} from './mogreps.js?v=20261020-reliable-points';
 import {fetchRunMetadata,resolveFeedRuns,verifiedRun} from './runs.js?v=20261020-mobile-time-runs';
 export const MODELS = [
   {id:'gfs',name:'GFS ENS',feed:'ncep_gefs_seamless',agency:'NOAA · GEFS',members:31,days:16,color:'#f3798a'},

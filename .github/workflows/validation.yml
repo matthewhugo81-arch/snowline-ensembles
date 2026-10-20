@@ -1,0 +1,30 @@
+name: Ensemble source and calculation validation
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ensemble-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install source indexer
+        run: pip install -r scripts/requirements.txt
+      - name: Validate chart calculations and native source decoder
+        run: npm test
+      - name: Validate source indexing and publication decisions
+        run: python -m unittest discover -s tests -p 'test_*.py'
