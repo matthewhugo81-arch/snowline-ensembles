@@ -3,6 +3,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      check_freshness:
+        description: Only build when source data or unfinished chart hours need publication
+        type: boolean
+        default: false
   schedule:
     - cron: '8,23,38,53 * * * *'
 permissions:
@@ -25,11 +30,11 @@ jobs:
           python-version: '3.12'
       - name: Check complete official cycles independently of the published index
         id: source
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || inputs.check_freshness == true
         run: python scripts/check_index_freshness.py
   build:
     needs: freshness
-    if: github.event_name != 'schedule' || needs.freshness.outputs.refresh == 'true'
+    if: (github.event_name != 'schedule' && inputs.check_freshness != true) || needs.freshness.outputs.refresh == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -54,9 +59,17 @@ jobs:
           path: docs/mogreps
           key: mogreps-v1-${{ github.run_id }}
           restore-keys: mogreps-v1-
-      - name: Index newest complete Met Office run
+      - name: Finish the published partial run before advancing
+        id: target
+        run: python scripts/select_map_run.py >> "$GITHUB_OUTPUT"
+      - name: Index required complete Met Office run
         id: index
-        run: python scripts/index_mogreps.py --workers 24
+        env:
+          MOGREPS_RUN: ${{ steps.target.outputs.run }}
+        run: |
+          args=()
+          if [ -n "$MOGREPS_RUN" ]; then args+=(--run "$MOGREPS_RUN"); fi
+          python scripts/index_mogreps.py --workers 24 "${args[@]}"
       - name: Cache indexed runs
         uses: actions/cache/save@v4
         with:
