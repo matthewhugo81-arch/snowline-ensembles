@@ -31,7 +31,7 @@ jobs:
     needs: freshness
     if: github.event_name != 'schedule' || needs.freshness.outputs.refresh == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,10 +62,42 @@ jobs:
         with:
           path: docs/mogreps
           key: mogreps-v1-${{ github.run_id }}
+      - name: Check out verified map importers
+        uses: actions/checkout@v4
+        with:
+          repository: matthewhugo81-arch/snowline
+          ref: 269932ce75920d3e0da22e380fe25a9d0e9e1018
+          path: map-importer
+      - name: Install map conversion tools
+        run: pip install -r map-importer/scripts/ensemble-requirements.txt
+      - name: Verify map importers
+        run: |
+          python -m unittest discover -s map-importer/tests -p 'test_mogreps*.py'
+          python -m unittest discover -s map-importer/tests -p 'test_vertical*.py'
+      - name: Restore companion grids
+        uses: actions/cache@v4
+        with:
+          path: docs/ensemble-data
+          key: companion-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: companion-grids-v1-
+      - name: Prepare native GEM upper air and MOGREPS comparison grids
+        run: |
+          python map-importer/scripts/build_gem_upper.py --model gem --output docs/ensemble-data --workers 6 &
+          gem=$!
+          python map-importer/scripts/build_mogreps_global.py --output docs/ensemble-data --index-root docs/mogreps --workers 8 --range-workers 8 --comparison-frames 24 &
+          mogreps=$!
+          failed=0
+          wait "$gem" || failed=1
+          wait "$mogreps" || failed=1
+          exit "$failed"
+      - name: Assemble binary-safe companion publication
+        run: |
+          cp -a docs _site
+          python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: _site
   deploy:
     environment:
       name: github-pages
