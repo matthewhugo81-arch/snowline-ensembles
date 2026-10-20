@@ -21,7 +21,23 @@ def companion_refresh(manifest, load=get):
             if len(mogreps.get('variable_valid_times', {}).get(key, [])) < len(manifest['leads']):
                 return True
         gem = json.loads(load(base+'snowline_gem_upper/latest.json'))
-        native = json.loads(load('https://openmeteo.s3.amazonaws.com/data_spatial/cmc_gem_gdps_15km/latest.json'))
+        # The completed index can lag the first published hours of the next run.
+        # Match the importer's latest/in-progress selection, including same-run
+        # growth, instead of waiting for the entire native run to finish.
+        candidates = []
+        for filename in ('latest.json', 'in-progress.json'):
+            try:
+                native = json.loads(load('https://openmeteo.s3.amazonaws.com/data_spatial/cmc_gem_gdps_15km/'+filename))
+                if native.get('valid_times'):
+                    candidates.append(native)
+            except HTTPError as error:
+                if error.code != 404:
+                    raise
+        if not candidates:
+            raise ValueError('No published native GEM hours verified')
+        native = max(candidates, key=lambda meta: (meta['reference_time'], len(meta['valid_times'])))
+        if gem['reference_time'] > native['reference_time']:
+            return False
         return not gem.get('completed') or gem['reference_time'] < native['reference_time']
     except HTTPError as error:
         if error.code != 404:
