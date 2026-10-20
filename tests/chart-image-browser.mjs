@@ -35,6 +35,7 @@ for(let member=0;member<31;member++)for(const key of ['temperature_850hPa','temp
     key==='temperature_850hPa'?3+5*Math.sin(i/12)+(member-15)/5:-25+5*Math.cos(i/18)+(member-15)/4);
 }
 const forecast={latitude:54,longitude:-2,elevation:180,hourly};
+const mogrepsManifest={schema:1,intervalHours:3,members:Array.from({length:18},(_,i)=>i),leads:Array.from({length:83},(_,i)=>i*3),run:START-12*HOUR,runId:'20261019T0000Z',variables:['temperature_850hPa','temperature_500hPa','precipitation','snowfall','pressure_msl']};
 const compact=text=>text.replace(/,/g,'').replace(/\s+/g,' ').trim();
 const utc=t=>new Date(t*1000).toISOString().replace('T',' ').replace('.000Z',' UTC');
 const report=[];
@@ -46,7 +47,7 @@ try {
     const context=await browser.newContext(kind==='iphone'?{...devices['iPhone 13'],acceptDownloads:true}:{viewport:{width:1440,height:1000},acceptDownloads:true});
     await context.tracing.start({screenshots:true,snapshots:true,sources:true});
     const page=await context.newPage(),errors=[],unexpected=[],downloads=[];
-    let forecasts=0,metadata=0,traceSaved=false;
+    let forecasts=0,metadata=0,manifests=0,traceSaved=false;
     page.setDefaultTimeout(15000);
     page.on('pageerror',error=>errors.push(error.message));
     await page.addInitScript(({now})=>{
@@ -75,9 +76,12 @@ try {
         forecasts++;assert.equal(url.searchParams.get('models'),'ncep_gefs_seamless');
         return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:forecast});
       }
-      if(url.hostname==='ensemble-api.open-meteo.com'&&/^\/data\/ncep_gefs(?:025|05)\/static\/meta\.json$/.test(url.pathname)){
+      if(url.hostname==='ensemble-api.open-meteo.com'&&/^\/data\/(?:ncep_gefs(?:025|05)|ecmwf_ifs025_ensemble|cmc_gem_geps)\/static\/meta\.json$/.test(url.pathname)){
         metadata++;const run=START-(url.pathname.includes('ncep_gefs025')?6:12)*HOUR;
         return route.fulfill({headers:{'Access-Control-Allow-Origin':'*'},json:{last_run_initialisation_time:run,last_run_modification_time:run+2*HOUR,last_run_availability_time:run+2*HOUR}});
+      }
+      if(url.origin===origin&&url.pathname==='/mogreps/latest.json'){
+        manifests++;return route.fulfill({json:mogrepsManifest});
       }
       if(url.origin===origin)return route.continue();
       if(url.hostname==='fonts.googleapis.com')return route.fulfill({contentType:'text/css',body:''});
@@ -87,8 +91,8 @@ try {
     try {
       await page.goto(origin+'/?lat=54&lon=-2&place=Fixture%20Valley&model=gfs');
       await page.waitForFunction(()=>!document.querySelector('#refresh').disabled&&document.querySelectorAll('#charts .plot>svg').length===5);
-      assert.equal(forecasts,1);assert.equal(metadata,4);
-      const requestCount={forecasts,metadata},menu=page.locator('#chart-image-menu');
+      assert.equal(forecasts,1);assert.equal(metadata,6);assert.equal(manifests,1);
+      const requestCount={forecasts,metadata,manifests},menu=page.locator('#chart-image-menu');
       const plot=id=>page.locator('#plot-'+id),card=id=>page.locator('.chart-card[data-var="'+id+'"]');
       const settle=async target=>{await target.scrollIntoViewIfNeeded();await target.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
       const svgInfo=async()=>page.evaluate(()=>{
@@ -195,7 +199,7 @@ try {
         await page.setViewportSize({width,height:844});await open('precipitation','button');
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Phone layout has no horizontal overflow');await page.keyboard.press('Escape');
       }
-      assert.deepEqual({forecasts,metadata},requestCount,'Image actions make no weather or metadata requests');
+      assert.deepEqual({forecasts,metadata,manifests},requestCount,'Image actions make no weather or metadata requests');
       assert.deepEqual(unexpected,[],'All network requests are local or deterministic fixtures');assert.deepEqual(errors,[]);
       report.push({browser:kind,downloads,clipboard:'Native ClipboardItem accepted promised PNG during user activation',fallback:'Denied and absent clipboard show PNG preview',requests:requestCount});
       await page.screenshot({path:resolve(out,kind+'-page.png'),fullPage:true});

@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {MODELS,VARIABLES,VARIABLE_DETAILS,valid,statistics,niceDomain,prepareDataset,resample,cumulativePrecipitation} from '../docs/data.js';
 import {runSummary,runDetail,runExport,resolveFeedRuns} from '../docs/runs.js';
+import {buildMobileTimeAxis,MOBILE_AXIS_BOTTOM} from '../docs/time-axis.js';
 
 const H=3600;
 const fixture=(times,values,native=1,model={...MODELS[0],members:values.length})=>prepareDataset({intervalHours:native,hourly:{time:times.map(t=>t*H),...Object.fromEntries(values.map((v,i)=>[i?'precipitation_member'+i:'precipitation',v]))}},model,0);
@@ -85,6 +86,7 @@ test('dry periods are complete but a model ending before the visible window cann
 const app=await readFile(new URL('../docs/app.js',import.meta.url),'utf8');
 const configSource=app.slice(app.indexOf('const configs=['),app.indexOf('];',app.indexOf('const configs=['))+2);
 const nearestSource=app.slice(app.indexOf('function nearestTime('),app.indexOf('function pointIndex('));
+const runLabelSource=app.slice(app.indexOf('function chartRunInfo('),app.indexOf('async function refreshLatestRuns('));
 const chartSource=app.slice(app.indexOf('function getYDomain('),app.indexOf('function mogrInfo('));
 const csvSource=app.slice(app.indexOf('function exportCSV(){'),app.indexOf('function captureChartImage('));
 const svgSource=app.slice(app.indexOf('function captureChartImage('),app.indexOf('async function openMap('));
@@ -92,12 +94,13 @@ const svgSource=app.slice(app.indexOf('function captureChartImage('),app.indexOf
 function harness(datasets,window,options={}){
   const models=datasets.map(d=>d.model),sampled=new Map(datasets.map(d=>[d.model.id,resample(d,options.interval??3)])),elements=new Map();
   const element=key=>{if(!elements.has(key))elements.set(key,{innerHTML:'',textContent:'',attributes:{},setAttribute(k,v){this.attributes[k]=v;},getBoundingClientRect:()=>({width:options.width??640,height:390})});return elements.get(key);};
-  const context={window,MODELS:models,VARIABLES,VARIABLE_DETAILS,valid,statistics,niceDomain,cumulativePrecipitation,runSummary,runDetail,runExport,Date,Intl,Blob,chartMetrics:new Map(),document:{documentElement:{dataset:{theme:options.theme??'dark'}}},state:{model:models[0].id,location:{name:'Test point',lat:53.9,lon:-2.2},datasets:new Map(datasets.map(d=>[d.model.id,d])),mode:options.mode??'members',interval:options.interval??3,scale:'auto',custom:options.custom??{},inspect:options.inspect??window[0],pending:new Set(),errors:new Map(),showMean:true,showControl:false,showBand:false,palette:'colour'},renderAvailability:()=>{},toast:()=>{},formatTime:t=>new Date(t*1000).toISOString(),shortTime:t=>new Date(t).toISOString(),fmt:(v,n=1)=>valid(v)?v.toFixed(n):'—',escapeHTML:s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),coordinateText:()=> '53.9° N · 2.2° W'};
+  const context={window,buildMobileTimeAxis,MOBILE_AXIS_BOTTOM,matchMedia:()=>({matches:options.mobile??(options.width!==undefined&&options.width<500)}),MODELS:models,VARIABLES,VARIABLE_DETAILS,valid,statistics,niceDomain,cumulativePrecipitation,runSummary,runDetail,runExport,Date,Intl,Blob,chartMetrics:new Map(),document:{documentElement:{dataset:{theme:options.theme??'dark'}}},state:{model:models[0].id,location:{name:'Test point',lat:53.9,lon:-2.2},datasets:new Map(datasets.map(d=>[d.model.id,d])),latestRuns:new Map(),mode:options.mode??'members',interval:options.interval??3,scale:'auto',custom:options.custom??{},inspect:options.inspect??window[0],pending:new Set(),errors:new Map(),showMean:true,showControl:false,showBand:false,palette:'colour'},renderAvailability:()=>{},toast:()=>{},formatTime:t=>new Date(t*1000).toISOString(),shortTime:t=>new Date(t).toISOString(),fmt:(v,n=1)=>valid(v)?v.toFixed(n):'—',escapeHTML:s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),coordinateText:()=> '53.9° N · 2.2° W'};
   context.$=selector=>{if(selector.endsWith(' svg')){const text=element(selector.slice(0,-4)).innerHTML;return text.startsWith('<svg')?{innerHTML:text.replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'')}:null;}return element(selector);};
+  context.$$=selector=>selector==='.chart-time-slider'?Array.from({length:5},(_,i)=>element('local-slider-'+i)):[];
   context.model=()=>models[0];context.visibleModels=()=>context.state.mode==='compare'?models:[models[0]];context.getSample=id=>sampled.get(id);context.domain=()=>context.window;context.visiblePoints=s=>s.time.map((t,i)=>t>=context.window[0]&&t<=context.window[1]?i:-1).filter(i=>i>=0);context.pointIndex=s=>s?.time.indexOf(context.state.inspect)??-1;context.nearestTime=t=>Math.round(t/(context.state.interval*H))*context.state.interval*H;
   context.download=(blob,name)=>{context.downloaded={blob,name};};
   context.getComputedStyle=()=>({getPropertyValue:name=>({'--cumulative':options.theme==='light'?'#0058bd':'#54b8ff','--surface':'#142437','--grid':'#304458','--muted':'#a8bbce','--ink':'#e4edf6','--teal':'#6ce1d6','--mean':'#f889a6','--control':'#8dacf5','--member':'#6ebfb7','--band':'#60bdb52b'}[name]??'')});
-  vm.createContext(context);vm.runInContext(configSource+'\n'+nearestSource+'\n'+chartSource+'\n'+csvSource+'\n'+svgSource+'\nrenderCharts();',context);
+  vm.createContext(context);vm.runInContext(configSource+'\n'+nearestSource+'\n'+runLabelSource+'\n'+chartSource+'\n'+csvSource+'\n'+svgSource+'\nrenderCharts();',context);
   return {context,element,run:source=>vm.runInContext(source,context)};
 }
 

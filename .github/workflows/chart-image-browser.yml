@@ -7,11 +7,13 @@ on:
       - 'docs/chart-image-export.js'
       - 'docs/data.js'
       - 'docs/runs.js'
+      - 'docs/time-axis.js'
       - 'docs/mogreps.js'
       - 'docs/index.html'
       - 'docs/style.css'
       - 'package*.json'
       - 'tests/chart-image-browser.mjs'
+      - 'tests/mobile-time-run-browser.mjs'
       - '.github/workflows/chart-image-browser.yml'
   pull_request:
     branches: [main]
@@ -20,11 +22,13 @@ on:
       - 'docs/chart-image-export.js'
       - 'docs/data.js'
       - 'docs/runs.js'
+      - 'docs/time-axis.js'
       - 'docs/mogreps.js'
       - 'docs/index.html'
       - 'docs/style.css'
       - 'package*.json'
       - 'tests/chart-image-browser.mjs'
+      - 'tests/mobile-time-run-browser.mjs'
       - '.github/workflows/chart-image-browser.yml'
   workflow_dispatch:
 permissions:
@@ -49,11 +53,15 @@ jobs:
         run: node tests/chart-image-browser.mjs
         env:
           SNOWLINE_TEST_OUTPUT: review-output/chart-images
+      - name: Check mobile dates, linked time sliders and eager model runs offline
+        run: node tests/mobile-time-run-browser.mjs
+        env:
+          SNOWLINE_TEST_OUTPUT: review-output/mobile-time-runs
       - name: Preserve PNG checks and failure traces
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ensemble-chart-images
-          path: review-output/chart-images/
+          path: review-output/
           if-no-files-found: ignore
           retention-days: 7
