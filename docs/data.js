@@ -52,7 +52,10 @@ export function niceDomain(values,zero=false){const a=values.filter(valid);if(!a
 export function parseCoordinates(text){const match=text.trim().match(/^([+-]?\d+(?:\.\d+)?)\s*[,;]\s*([+-]?\d+(?:\.\d+)?)$/);if(!match)return null;const lat=+match[1],lon=+match[2];if(Math.abs(lat)>90||Math.abs(lon)>180)throw new Error('Latitude must be −90 to 90, longitude −180 to 180.');return {name:'Selected coordinates',lat,lon};}
 export async function fetchEnsemble(model,location,signal,onProgress) {
   if(model.id==='mogreps')return prepareDataset(await fetchMogreps(location,signal,(raw,done,total)=>onProgress?.(prepareDataset(raw,model),done,total)),model);
-  const params=new URLSearchParams({latitude:location.lat,longitude:location.lon,models:model.feed,hourly:VARIABLES.join(','),forecast_days:model.days,past_days:1,timeformat:'unixtime',timezone:'GMT'});
+  // forecast_days counts UTC calendar days starting at midnight, not days from
+  // initialization. Include the final calendar date so +384h/+360h and non-00Z
+  // endpoints are fetched too; the provider's unavailable values remain null.
+  const params=new URLSearchParams({latitude:location.lat,longitude:location.lon,models:model.feed,hourly:VARIABLES.join(','),forecast_days:model.days+1,past_days:1,timeformat:'unixtime',timezone:'GMT'});
   const before=await fetchRunMetadata(model,signal);
   signal?.throwIfAborted();
   const requested=Date.now();

@@ -1,4 +1,4 @@
-import {MODELS,VARIABLES,VARIABLE_DETAILS,valid,statistics,niceDomain,parseCoordinates,resample,cumulativePrecipitation,fetchEnsemble} from './data.js?v=20261020-mobile-time-runs';
+import {MODELS,VARIABLES,VARIABLE_DETAILS,valid,statistics,niceDomain,parseCoordinates,resample,cumulativePrecipitation,fetchEnsemble} from './data.js?v=20261020-full-horizon';
 import {fetchLatestRun,runSummary,runDetail,runExport} from './runs.js?v=20261020-mobile-time-runs';
 import {buildMobileTimeAxis,MOBILE_AXIS_BOTTOM} from './time-axis.js?v=20261020-mobile-time-runs';
 import {createChartImageMenu,downloadFile as download} from './chart-image-export.js?v=20261019-image-background';
