@@ -40,7 +40,16 @@ class PendingMapRunTests(unittest.TestCase):
         fields += ['geopotential_height_500hPa_anomaly_mean']
         metadata = {'reference_time': run.isoformat(), 'variable_valid_times': {key: list(range(83)) for key in fields}}
         def load(url):
-            return json.dumps(metadata if 'mogreps' in url else {'reference_time': run.isoformat(), 'completed': True}).encode()
+            if 'snowline_mogreps_global' in url:
+                value = metadata
+            elif 'snowline_gem_upper' in url:
+                value = {'reference_time': run.isoformat(), 'completed': True}
+            else:
+                # Native latest/in-progress indexes advertise the actual hours.
+                # A completed companion is not a substitute for this evidence.
+                value = {'reference_time': run.isoformat(), 'completed': True,
+                         'valid_times': [run.isoformat()]}
+            return json.dumps(value).encode()
         self.assertFalse(companion_refresh(manifest, load=load))
 
 

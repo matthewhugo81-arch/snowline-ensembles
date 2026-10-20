@@ -12,6 +12,7 @@ on:
     - cron: '8,23,38,53 * * * *'
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 concurrency:
@@ -23,6 +24,7 @@ jobs:
     timeout-minutes: 8
     outputs:
       refresh: ${{ steps.source.outputs.refresh }}
+      blocked: ${{ steps.backoff.outputs.blocked }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,9 +34,15 @@ jobs:
         id: source
         if: github.event_name == 'schedule' || inputs.check_freshness == true
         run: python scripts/check_index_freshness.py
+      - name: Pause repeated automatic builds after identical test failures
+        id: backoff
+        if: steps.source.outputs.refresh == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/check_build_backoff.py
   build:
     needs: freshness
-    if: (github.event_name != 'schedule' && inputs.check_freshness != true) || needs.freshness.outputs.refresh == 'true'
+    if: (github.event_name != 'schedule' && inputs.check_freshness != true) || (needs.freshness.outputs.refresh == 'true' && needs.freshness.outputs.blocked != 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
