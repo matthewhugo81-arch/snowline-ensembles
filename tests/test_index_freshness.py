@@ -13,7 +13,7 @@ class RefreshGateTests(unittest.TestCase):
     def test_unchanged_cycle_skips_and_newer_cycle_refreshes(self):
         reference = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
         manifest = json.dumps(dict(schema=1, members=list(range(18)), run=int(reference.timestamp()))).encode()
-        with patch.object(gate, 'get', return_value=manifest), patch.object(gate, 'newest_complete_after', return_value=reference):
+        with patch.object(gate, 'get', return_value=manifest), patch.object(gate, 'newest_complete_after', return_value=reference), patch.object(gate, 'companion_refresh', return_value=False):
             self.assertFalse(gate.check())
         from datetime import timedelta
         with patch.object(gate, 'get', return_value=manifest), patch.object(gate, 'newest_complete_after', return_value=reference+timedelta(hours=6)):
