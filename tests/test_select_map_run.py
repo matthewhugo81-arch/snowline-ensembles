@@ -19,6 +19,19 @@ class PendingMapRunTests(unittest.TestCase):
         self.assertEqual(pending_run({'reference_time': '2026-10-20T06:00:00Z', 'completed': True}, NOW), '')
         self.assertEqual(pending_run({'reference_time': '2026-10-18T06:00:00Z', 'completed': False}, NOW), '')
 
+    def test_optional_comparison_outage_cannot_pin_a_complete_core_cycle(self):
+        self.assertEqual(pending_run({'reference_time':'2026-10-20T06:00:00Z','completed':False,'core_completed':True},NOW),'')
+
+    def test_legacy_core_coverage_is_verified_before_advancing(self):
+        reference=NOW-timedelta(hours=12)
+        instant=['temperature_850hPa_mean','temperature_850hPa_spread','temperature_500hPa_mean','temperature_500hPa_spread']
+        period=['precipitation_mean','snowfall_water_equivalent_mean','precipitation_probability','snowfall_probability']
+        meta={'reference_time':reference.isoformat(),'completed':False,'format_version':2,'member_count':18,
+              'variable_valid_times':{key:[(reference+timedelta(hours=h)).isoformat() for h in range(0 if key in instant else 3,247,3)] for key in instant+period}}
+        self.assertEqual(pending_run(meta,NOW),'')
+        meta['variable_valid_times']['snowfall_probability'].pop()
+        self.assertEqual(pending_run(meta,NOW),reference.isoformat())
+
     def test_malformed_initialization_is_rejected(self):
         for reference in ['2026-10-20T07:00:00Z', '2026-10-20T06:00:01Z', '2026-10-20T06:00:00', 'bad']:
             with self.subTest(reference=reference), self.assertRaises(ValueError):
