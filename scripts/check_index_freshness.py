@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from mogreps_source import get, newest_complete_after
 from retain_map_runs import needs_refresh
+from ukmo_early_source import pending as pending_ukmo
 
 
 def companion_refresh(manifest, load=get):
@@ -54,6 +55,11 @@ def check():
             raise ValueError('Invalid published ensemble manifest')
         latest = newest_complete_after(reference, now)
         refresh = latest > reference or now - reference > timedelta(hours=48) or companion_refresh(manifest) or needs_refresh()
+        if not refresh:
+            try:
+                refresh = pending_ukmo(now) is not None
+            except Exception as error:
+                print(f'::warning::UKMO early source check will retry: {error}')
         print(f'Published: {reference.isoformat()}; newest complete: {latest.isoformat()}; refresh: {refresh}')
     except HTTPError as error:
         if error.code != 404:

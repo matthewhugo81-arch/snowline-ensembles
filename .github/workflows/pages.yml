@@ -103,10 +103,15 @@ jobs:
           wait "$gem" || failed=1
           wait "$mogreps" || failed=1
           exit "$failed"
+      - name: Publish early UKMO hours from the direct free Met Office feed
+        timeout-minutes: 8
+        continue-on-error: true
+        run: python scripts/build_ukmo_early.py --output docs/ensemble-data --workers 4
       - name: Retain complete additional ensemble runs
         run: python scripts/retain_map_runs.py
       - name: Assemble binary-safe companion publication
         run: |
+          python -c "from pathlib import Path; [p.unlink() for p in Path('docs/ensemble-data/snowline_ukmo_early').rglob('*.tmp')]"
           cp -a docs _site
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           python -c "from pathlib import Path; n=sum(p.stat().st_size for p in Path('_site').rglob('*') if p.is_file()); print(f'Published files: {n} bytes'); assert n < 1000000000, 'Publication exceeds the 1 GB hosting limit'"
