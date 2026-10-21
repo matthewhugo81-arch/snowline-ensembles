@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: matthewhugo81-arch/snowline
-          ref: 5555a9502f4f9e52025023b1167cd4075d68db90
+          ref: a6ed1702c5c605c9d17dd1a60fd7c06d085e632c
           path: map-importer
       - name: Install map conversion tools
         run: pip install -r map-importer/scripts/ensemble-requirements.txt
