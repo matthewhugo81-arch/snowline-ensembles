@@ -282,7 +282,7 @@ test('a newer plotted run queues one catalogue refresh behind a slow lookup with
   let announceGfs;
   const gfsReady=new Promise(resolve=>{announceGfs=resolve;});
   const context=vm.createContext({
-    MODELS,state,Date,Promise,valid:Number.isFinite,runSummary,runDetail,
+    MODELS,state,Date,Promise,valid:Number.isFinite,formatRun,runSummary,runDetail,
     document:{activeElement:null},configs:[{id:'temperature_850hPa'}],visibleModels:()=>[model('gfs'),model('ec')],
     escapeHTML:String,$:selector=>{if(!elements.has(selector))elements.set(selector,{});return elements.get(selector);},$$:()=>[],renderAvailability:()=>{if(state.latestRuns.has('gfs'))announceGfs();},
     fetchLatestRun:async m=>{
@@ -312,7 +312,8 @@ test('a newer plotted run queues one catalogue refresh behind a slow lookup with
   assert.equal([...requests.values()].reduce((sum,count)=>sum+count,0),8,'there is no third catalogue round');
   assert.equal(state.latestRuns.get('gfs').sources[0].run,run+21600);
   assert.match(elements.get('#models').innerHTML,/Latest feed run 19 Oct 12Z/);
-  assert.match(elements.get('#models').innerHTML,/Chart: Feed run 19 Oct 06Z/);
+  assert.doesNotMatch(elements.get('#models').innerHTML,/model-plotted-run|Chart:/);
+  assert.equal((elements.get('#models').innerHTML.match(/class="model-run"/g)??[]).length,MODELS.length);
   assert.match(elements.get('#run-temperature_850hPa').textContent,/GFS ENS · Feed run 19 Oct 12Z.*EC ENS · Feed run 19 Oct 06Z/);
   assert.equal(state.datasets.size,2,'catalogue refresh does not load or replace forecast datasets');
   assert.equal(state.datasets.get('gfs'),gfsDataset);

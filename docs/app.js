@@ -1,5 +1,5 @@
 import {MODELS,VARIABLES,VARIABLE_DETAILS,valid,statistics,niceDomain,parseCoordinates,resample,cumulativePrecipitation,fetchEnsemble} from './data.js?v=20261020-full-horizon';
-import {fetchLatestRun,runSummary,runDetail,runExport} from './runs.js?v=20261020-mobile-time-runs';
+import {fetchLatestRun,formatRun,runSummary,runDetail,runExport} from './runs.js?v=20261020-mobile-time-runs';
 import {buildMobileTimeAxis,MOBILE_AXIS_BOTTOM} from './time-axis.js?v=20261020-mobile-time-runs';
 import {createChartImageMenu,downloadFile as download} from './chart-image-export.js?v=20261019-image-background';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -44,6 +44,12 @@ function runSignature(info){
   if(info?.type==='verified'||info?.type==='latest-manifest')return valid(info.run)?String(info.run):'';
   return (info?.sources??[]).filter(source=>valid(source.run)).map(source=>source.domain+':'+source.run).sort().join('|');
 }
+// Model cards show the latest reported feed cycle; charts keep their own run details.
+function latestFeedSummary(info){
+  if(!info)return 'Checking latest feed run…';
+  const runs=[info.run,...(info.sources??[]).map(source=>source.run)].filter(valid);
+  return `Latest feed run ${formatRun(runs.length?Math.max(...runs):null)}`;
+}
 function chartRunInfo(id){return state.datasets.has(id)?state.datasets.get(id).runInfo:state.latestRuns.get(id);}
 function renderRunLabels(){for(const c of configs){const runLabel=$('#run-'+c.id);runLabel.textContent=visibleModels().map(m=>`${m.name} · ${runSummary(chartRunInfo(m.id),c.id)}`).join('  |  ');runLabel.title=visibleModels().map(m=>`${m.name}: ${runDetail(chartRunInfo(m.id),c.id)}`).join('\n');}}
 async function refreshLatestRuns({force=false}={}){
@@ -62,9 +68,7 @@ function renderModels(){
   $('#models').innerHTML=MODELS.map(m=>{
     const d=state.datasets.get(m.id),latest=state.latestRuns.get(m.id),info=latest??d?.runInfo;
     const status=state.pending.has(m.id)?(state.progress.get(m.id)||'Loading…'):state.errors.has(m.id)?'Feed unavailable':`${m.members} members · up to ${m.days} days`;
-    const differs=d?.runInfo&&runSignature(d.runInfo)&&latest&&runSignature(d.runInfo)!==runSignature(latest);
-    const plotted=differs?`<small class="model-run model-plotted-run" title="${escapeHTML(runDetail(d.runInfo))}">Chart: ${escapeHTML(runSummary(d.runInfo))}</small>`:'';
-    return `<button class="model" data-model="${m.id}" aria-pressed="${state.model===m.id}" style="--model:${m.color}" title="${escapeHTML(m.agency)}"><span class="model-dot"></span><span><strong>${m.name}</strong><small>${status}</small><small class="model-run" title="${escapeHTML(runDetail(info))}">${escapeHTML(runSummary(info))}</small>${plotted}</span><span class="check">${state.model===m.id?'✓':d?'·':''}</span></button>`;
+    return `<button class="model" data-model="${m.id}" aria-pressed="${state.model===m.id}" style="--model:${m.color}" title="${escapeHTML(m.agency)}"><span class="model-dot"></span><span><strong>${m.name}</strong><small>${status}</small><small class="model-run" title="${escapeHTML(runSummary(info)+' · '+runDetail(info))}">${escapeHTML(latestFeedSummary(info))}</small></span><span class="check">${state.model===m.id?'✓':d?'·':''}</span></button>`;
   }).join('');
   $$('[data-model]').forEach(b=>b.onclick=()=>selectModel(b.dataset.model));
   if(focused)$('#models [data-model="'+focused+'"]')?.focus({preventScroll:true});

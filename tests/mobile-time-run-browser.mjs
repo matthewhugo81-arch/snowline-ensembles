@@ -98,10 +98,11 @@ try{
       assert.equal(f.counts.forecasts,1);assert.equal(f.counts.points,0,'Only metadata is requested for unselected MOGREPS');
       assert.equal(await page.locator('.plot>svg').count(),0,'Runs are visible before chart data arrives');
       assert.doesNotMatch(await page.locator('body').textContent(),/Run available after loading/);
-      assert.match(await page.locator('[data-model="gfs"] .model-run').textContent(),/0\.25°.*18Z.*0\.5°.*12Z/);
-      assert.match(await page.locator('[data-model="ec"] .model-run').textContent(),/18Z/);
-      assert.match(await page.locator('[data-model="gem"] .model-run').textContent(),/12Z/);
-      assert.match(await page.locator('[data-model="mogreps"] .model-run').textContent(),/12Z/);
+      assert.equal(await page.locator('[data-model="gfs"] .model-run').textContent(),'Latest feed run 19 Oct 18Z');
+      assert.match(await page.locator('[data-model="gfs"] .model-run').getAttribute('title'),/0\.25°.*18Z.*0\.5°.*12Z/);
+      assert.equal(await page.locator('[data-model="ec"] .model-run').textContent(),'Latest feed run 19 Oct 18Z');
+      assert.equal(await page.locator('[data-model="gem"] .model-run').textContent(),'Latest feed run 19 Oct 12Z');
+      assert.equal(await page.locator('[data-model="mogreps"] .model-run').textContent(),'Latest feed run 19 Oct 12Z');
       f.release();await settled(page);
       const initialRequests={...f.counts};assert.equal(initialRequests.forecasts,1);assert.equal(initialRequests.metadata,6);assert.equal(initialRequests.manifests,1);
       if(kind!=='iphone'){
@@ -134,9 +135,10 @@ try{
       await assertInspectors(page);
       const chartRun=await page.locator('#run-temperature_850hPa').textContent();f.advanceRuns();
       await page.evaluate(now=>{Date.now=()=>now;window.dispatchEvent(new Event('focus'));},NOW+6*HOUR*1000);
-      await page.waitForFunction(()=>/20 Oct 00Z/.test(document.querySelector('[data-model="gfs"] .model-run:not(.model-plotted-run)').textContent));
+      await page.waitForFunction(()=>/20 Oct 00Z/.test(document.querySelector('[data-model="gfs"] .model-run').textContent));
       assert.equal(await page.locator('#run-temperature_850hPa').textContent(),chartRun,'New catalogue runs cannot relabel previously loaded charts');
-      assert.match(await page.locator('[data-model="gfs"] .model-plotted-run').textContent(),/19 Oct/);
+      assert.equal(await page.locator('.model-plotted-run').count(),0);
+      assert.equal(await page.locator('.model-run').count(),4);
       assert.equal(f.counts.forecasts,3);assert.equal(f.counts.points,83,'Refreshing latest runs uses no extra point forecasts');
       assert.deepEqual(f.errors,[]);assert.deepEqual(f.unexpected,[]);
       report.push({browser:kind,views,eagerRunCards:4,requests:f.counts,errors:f.errors});
