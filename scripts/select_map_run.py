@@ -8,7 +8,9 @@ URL = 'https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/sno
 
 
 def pending_run(meta, now):
-    if meta.get('completed'):
+    # Supplemental native layers and the optional NOAA anomaly continue on
+    # later passes; they must not hold a complete core cycle behind newer data.
+    if meta.get('completed') or meta.get('core_completed') is True:
         return ''
     reference = datetime.fromisoformat(meta['reference_time'].replace('Z', '+00:00'))
     if reference.tzinfo is None or reference.minute or reference.second or reference.microsecond or reference.hour not in (0, 6, 12, 18):

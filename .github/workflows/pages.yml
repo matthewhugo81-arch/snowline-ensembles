@@ -35,6 +35,8 @@ jobs:
   build:
     needs: freshness
     if: (github.event_name != 'schedule' && inputs.check_freshness != true) || needs.freshness.outputs.refresh == 'true'
+    outputs:
+      changed: ${{ steps.publication.outputs.changed }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -79,7 +81,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: matthewhugo81-arch/snowline
-          ref: a43feebf623efe83e2d8c94018b13d8ab8d25433
+          ref: 5555a9502f4f9e52025023b1167cd4075d68db90
           path: map-importer
       - name: Install map conversion tools
         run: pip install -r map-importer/scripts/ensemble-requirements.txt
@@ -93,6 +95,14 @@ jobs:
           path: docs/ensemble-data
           key: companion-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: companion-grids-v1-
+      # The verified fixed baseline stays outside the public site tree.
+      - uses: actions/cache@v4
+        with:
+          path: climatology-cache
+          key: mogreps-climatology-500hpa-1991-2020-v1
+      - name: Prepare verified NOAA climatology from the independent bulk archive
+        continue-on-error: true
+        run: python map-importer/scripts/mogreps_climatology_cache.py
       - name: Prepare native GEM upper air and MOGREPS comparison grids
         run: |
           python map-importer/scripts/build_gem_upper.py --model gem --output docs/ensemble-data --workers 6 &
@@ -115,11 +125,17 @@ jobs:
           cp -a docs _site
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           python -c "from pathlib import Path; n=sum(p.stat().st_size for p in Path('_site').rglob('*') if p.is_file()); print(f'Published files: {n} bytes'); assert n < 1000000000, 'Publication exceeds the 1 GB hosting limit'"
+      - name: Skip uploads when the actual forecast content is unchanged
+        id: publication
+        run: python map-importer/scripts/publication_manifest.py _site --live-url https://matthewhugo81-arch.github.io/snowline-ensembles/publication.json
       - uses: actions/configure-pages@v5
+        if: steps.publication.outputs.changed == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.publication.outputs.changed == 'true'
         with:
           path: _site
   deploy:
+    if: needs.build.outputs.changed == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

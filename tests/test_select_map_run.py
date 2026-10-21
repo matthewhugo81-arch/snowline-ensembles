@@ -19,6 +19,9 @@ class PendingMapRunTests(unittest.TestCase):
         self.assertEqual(pending_run({'reference_time': '2026-10-20T06:00:00Z', 'completed': True}, NOW), '')
         self.assertEqual(pending_run({'reference_time': '2026-10-18T06:00:00Z', 'completed': False}, NOW), '')
 
+    def test_optional_comparison_outage_cannot_pin_a_complete_core_cycle(self):
+        self.assertEqual(pending_run({'reference_time':'2026-10-20T06:00:00Z','completed':False,'core_completed':True},NOW),'')
+
     def test_malformed_initialization_is_rejected(self):
         for reference in ['2026-10-20T07:00:00Z', '2026-10-20T06:00:01Z', '2026-10-20T06:00:00', 'bad']:
             with self.subTest(reference=reference), self.assertRaises(ValueError):
