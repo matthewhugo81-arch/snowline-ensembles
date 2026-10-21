@@ -40,7 +40,16 @@ class PendingMapRunTests(unittest.TestCase):
         fields += ['geopotential_height_500hPa_anomaly_mean']
         metadata = {'reference_time': run.isoformat(), 'variable_valid_times': {key: list(range(83)) for key in fields}}
         def load(url):
-            return json.dumps(metadata if 'mogreps' in url else {'reference_time': run.isoformat(), 'completed': True}).encode()
+            if 'snowline_mogreps_global' in url:
+                return json.dumps(metadata).encode()
+            if 'snowline_gem_upper' in url:
+                return json.dumps({'reference_time': run.isoformat(), 'completed': True}).encode()
+            # Native latest and in-progress inventories contain actual valid times.
+            native = {'reference_time': run.isoformat(), 'completed': True,
+                      'valid_times': [(run + timedelta(hours=h)).isoformat() for h in range(0, 241, 3)]}
+            if url.endswith('in-progress.json'):
+                native = {**native, 'completed': False, 'valid_times': native['valid_times'][:10]}
+            return json.dumps(native).encode()
         self.assertFalse(companion_refresh(manifest, load=load))
 
 
